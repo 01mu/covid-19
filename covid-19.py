@@ -20,85 +20,113 @@ def main():
     conn = make_conn('credentials')
     conn.set_character_set('utf8')
 
-    if sys.argv[1] == 'clear-cases':
-        conn.cursor().execute('DELETE from cases')
-        conn.commit()
-
-        print 'cases cleared'
-
     if sys.argv[1] == 'update-cases':
-        update_cases(conn)
+        url = ('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/' +
+            'master/csse_covid_19_data/csse_covid_19_time_series/' +
+            'time_series_19-covid-')
+
+        cases = {}
+        dates = []
+
+        for t in ['Confirmed', 'Deaths', 'Recovered']:
+            get_data(url, t, cases, dates)
+
+        update_cases(cases, dates, conn)
 
     if sys.argv[1] == 'create-tables':
         create_tables(conn)
 
-def update_cases(conn):
+    if sys.argv[1] == 'clear-tables':
+        for v in ['cases', 'new_daily', 'key_values']:
+            conn.cursor().execute('DELETE FROM ' + v)
+
+            print v + ' cleared'
+
+        conn.commit()
+
+def update_cases(cases, dates, conn):
     cur = conn.cursor()
 
-    url = ('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/' +
-        'csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-')
+    confirmed = deaths = recovered = 0
+    confirmed_total = deaths_total = recovered_total = 0
 
-    cases = {}
-    dates = []
+    days = len(cases['China'].confirmed)
 
-    confirmed = deaths = recovered = new_cases = 0
-    confirmed_total = deaths_total = recovered_total = new_cases_recent = 0
-
-    for t in ['Confirmed', 'Deaths', 'Recovered']:
-        get_data(url, t, cases, dates)
+    change_confirmed = [0] * days
+    change_deaths = [0] * days
+    change_recovered = [0] * days
 
     for key, value in cases.items():
-        print key
-
-        prev = 0
         i = 0
 
-        for i in range(len(value.confirmed)):
-            d = dates[i].split('/')
-            dt = datetime.datetime(int(d[2]) + 2000, int(d[0]), int(d[1]), 0, 0)
+        print 'inserting ' + str(days) + ' values for ' + key
 
-            timestamp = int(time.mktime(dt.timetuple()))
+        prev_confirmed = prev_deaths =  prev_recovered = 0
+
+        for i in range(len(value.confirmed)):
+            timestamp = dates[i]
+
             confirmed = value.confirmed[i]
             deaths = value.deaths[i]
             recovered = value.recovered[i]
-            new_cases = confirmed - prev
+
+            new_confirmed = confirmed - prev_confirmed
+            new_deaths = deaths - prev_deaths
+            new_recovered = recovered - prev_recovered
+
+            change_confirmed[i] += new_confirmed
+            change_deaths[i] += new_deaths
+            change_recovered[i] += new_recovered
 
             try:
                 cfr = deaths / (float(confirmed)) * 100
             except:
                 cfr = 0
 
-            print (str(timestamp) + ' ' + str(confirmed) + ' ' + str(deaths) +
-                ' ' + str(recovered) + ' ' + str(cfr) + ' ' + str(new_cases))
-
             cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
-                recovered, cfr, new_cases, country, instance) VALUES (%s, %s, \
+                recovered, cfr, new_confirmed, new_deaths, new_recovered, \
+                country, instance) VALUES (%s, %s, %s, %s, \
                 %s, %s, %s, %s, %s, 1)', (timestamp, confirmed, deaths,
-                recovered, cfr, new_cases, key))
+                recovered, cfr, new_confirmed, new_deaths, new_recovered, key))
 
-            prev = confirmed
+            prev_confirmed = confirmed
+            prev_deaths = deaths
+            prev_recovered = recovered
 
         confirmed_total += confirmed
         deaths_total += deaths
         recovered_total += recovered
-        new_cases_recent += new_cases
 
-    cur.execute('DELETE FROM cases WHERE instance = 0')
-    cur.execute('UPDATE cases SET instance = 0 WHERE instance = 1')
+    for i in range(days):
+        d = dates[i]
 
-    fix = [['Taiwan', 'Taiwan*'], ['United States', 'US'],
-        ['Korea, South', 'South Korea']]
+        for j in [  ['confirmed', change_confirmed[i]],
+                    ['deaths', change_deaths[i]],
+                    ['recovered', change_recovered[i]]]:
+            cur.execute('INSERT INTO new_daily(timestamp, type, value, \
+            instance) VALUES (%s, %s, %s, 1)', (d, j[0], j[1],))
 
-    for i in fix:
+    for v in [  'DELETE FROM new_daily WHERE instance = 0',
+                'UPDATE new_daily SET instance = 0 WHERE instance = 1',
+                'DELETE FROM cases WHERE instance = 0',
+                'UPDATE cases SET instance = 0 WHERE instance = 1']:
+        cur.execute(v)
+
+    for i in [  ['confirmed_total', confirmed_total],
+                ['deaths_total', deaths_total],
+                ['recovered_total', recovered_total],
+                ['confirmed_latest', change_confirmed[days - 1]],
+                ['deaths_latest', change_deaths[days - 1]],
+                ['recovered_latest', change_recovered[days - 1]],
+                ['cfr_total', deaths_total / float(confirmed_total) * 100],
+                ['last_update_cases', int(time.time())]]:
+        insert_value(cur, i[0], i[1])
+
+    for i in [  ['Taiwan', 'Taiwan*'],
+                ['United States', 'US'],
+                ['Korea, South', 'South Korea']]:
         cur.execute('UPDATE cases SET country = "' + i[0] +'" \
             WHERE country = "' + i[1] +'"')
-
-    insert_value(cur, 'confirmed_total', confirmed_total)
-    insert_value(cur, 'deaths_total', deaths_total)
-    insert_value(cur, 'recovered_total', recovered_total)
-    insert_value(cur, 'new_cases_recent', new_cases_recent)
-
-    insert_value(cur, 'last_update_cases', int(time.time()))
 
     conn.commit()
 
@@ -106,7 +134,11 @@ def get_dates(a, dates):
     i = 4
 
     while i < len(a[0]):
-        dates.append(a[0][i])
+        d = a[0][i].split('/')
+        dt = datetime.datetime(int(d[2]) + 2000, int(d[0]), int(d[1]), 0, 0)
+        timestamp = int(time.mktime(dt.timetuple()))
+
+        dates.append(timestamp)
         i += 1
 
 def get_data(url, stat, cases, dates):
@@ -184,9 +216,17 @@ def create_tables(conn):
             "ALTER TABLE cases ADD COLUMN confirmed INT",
             "ALTER TABLE cases ADD COLUMN deaths INT",
             "ALTER TABLE cases ADD COLUMN recovered INT",
-            "ALTER TABLE cases ADD COLUMN new_cases INT",
+            "ALTER TABLE cases ADD COLUMN new_confirmed INT",
+            "ALTER TABLE cases ADD COLUMN new_deaths INT",
+            "ALTER TABLE cases ADD COLUMN new_recovered INT",
             "ALTER TABLE cases ADD COLUMN cfr FLOAT",
             "ALTER TABLE cases ADD COLUMN instance INT",
+
+            "CREATE TABLE new_daily(id SERIAL PRIMARY KEY)",
+            "ALTER TABLE new_daily ADD COLUMN timestamp INT",
+            "ALTER TABLE new_daily ADD COLUMN type TEXT",
+            "ALTER TABLE new_daily ADD COLUMN value INT",
+            "ALTER TABLE new_daily ADD COLUMN instance INT",
 
             "CREATE TABLE key_values(id SERIAL PRIMARY KEY)",
             "ALTER TABLE key_values ADD COLUMN input_key TEXT",
