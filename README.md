@@ -6,8 +6,8 @@ Create tables after creating a `credentials` file based on `credentials_example`
 | Table | Function |
 | --- | --- |
 | cases | Includes cumulative data and new cases by country for a given day |
-| new_daily | Includes daily aggregates for data independent of country
-| key_values | Store confirmed, death, and recovery values
+| daily | Includes daily increases and totals of data independent of country |
+| key_values | Stores confirmed, death, and recovery values |
 ```
 ./covid-19.py create-tables
 ```
@@ -42,6 +42,6 @@ Delete table entries.
 ```
 ```
 cases cleared
-new_daily cleared
+daily cleared
 key_values cleared
 ```
