@@ -18,7 +18,6 @@ class CountryData:
 
 def main():
     conn = make_conn('credentials')
-    conn.set_character_set('utf8')
 
     if sys.argv[1] == 'update-cases':
         url = ('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/' +
@@ -125,8 +124,8 @@ def update_cases(cases, dates, conn):
     for i in [  ['Taiwan', 'Taiwan*'],
                 ['United States', 'US'],
                 ['Korea, South', 'South Korea']]:
-        cur.execute('UPDATE cases SET country = "' + i[0] +'" \
-            WHERE country = "' + i[1] +'"')
+        cur.execute('UPDATE cases SET country = \'' + i[0] +
+            '\' WHERE country = \'' + i[1] + '\'')
 
     conn.commit()
 
@@ -189,14 +188,18 @@ def make_conn(cred_file):
 
     if creds[0] == 'mysql':
         if len(creds) == 7:
-            return MySQLdb.connect(db = creds[1],
+            c = MySQLdb.connect(db = creds[1],
                 user = creds[2],
                 passwd = creds[3],
                 unix_socket = creds[6])
         else:
-            return MySQLdb.connect(db = creds[1],
+            c = MySQLdb.connect(db = creds[1],
                 user = creds[2],
                 passwd = creds[3])
+
+        c.set_character_set('utf8')
+
+        return c
     else:
         return psycopg2.connect(database = creds[1],
             user = creds[2],
