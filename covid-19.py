@@ -20,15 +20,11 @@ def main():
     conn = make_conn('credentials')
 
     if sys.argv[1] == 'update-cases':
-        url = ('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/' +
-            'master/csse_covid_19_data/csse_covid_19_time_series/' +
-            'time_series_19-covid-')
-
         cases = {}
         dates = []
 
         for t in ['Confirmed', 'Deaths', 'Recovered']:
-            get_data(url, t, cases, dates)
+            get_data(t, cases, dates)
 
         update_cases(cases, dates, conn)
 
@@ -129,7 +125,7 @@ def update_cases(cases, dates, conn):
 
     for i in [  ['Taiwan', 'Taiwan*'],
                 ['United States', 'US'],
-                ['Korea, South', 'South Korea']]:
+                ['South Korea', 'Korea, South']]:
         cur.execute("UPDATE cases SET country = '" + i[0] + " \
             ' WHERE country = '" + i[1] + "'")
 
@@ -146,8 +142,11 @@ def get_dates(a, dates):
         dates.append(timestamp)
         i += 1
 
-def get_data(url, stat, cases, dates):
-    open('data', 'wb').write(requests.get(url + stat + '.csv').content)
+def get_data(stat, cases, dates):
+    open('data', 'wb').write(requests.get((
+        'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/' +
+        'master/csse_covid_19_data/csse_covid_19_time_series/' +
+        'time_series_19-covid-') + stat + '.csv').content)
 
     with open('data') as csvfile:
         a = list(csv.reader(csvfile, delimiter=',', quotechar='"'))
