@@ -46,6 +46,7 @@ def update_cases(cases, dates, conn):
     confirmed_total = deaths_total = recovered_total = 0
 
     days = len(cases['China'].confirmed)
+    li = days - 1
 
     inc_confirmed = [0] * days
     inc_deaths = [0] * days
@@ -106,20 +107,28 @@ def update_cases(cases, dates, conn):
             cur.execute('INSERT INTO daily(timestamp, type, value, \
             instance) VALUES (%s, %s, %s, 1)', (d, j[0], j[1],))
 
+    cfr_total = tot_deaths[li] / float(tot_confirmed[li]) * 100
+
+    cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
+        recovered, cfr, new_confirmed, new_deaths, new_recovered, \
+        country, instance) VALUES (%s, %s, %s, %s, \
+        %s, %s, %s, %s, \'Global\', 1)', (dates[li], tot_confirmed[li],
+        tot_deaths[li], tot_recovered[i], cfr_total, inc_confirmed[li],
+        inc_deaths[li], inc_recovered[li]))
+
     for v in [  'DELETE FROM daily WHERE instance = 0',
                 'UPDATE daily SET instance = 0 WHERE instance = 1',
                 'DELETE FROM cases WHERE instance = 0',
                 'UPDATE cases SET instance = 0 WHERE instance = 1']:
         cur.execute(v)
 
-    for i in [  ['confirmed_total', tot_confirmed[days - 1]],
-                ['deaths_total', tot_deaths[days - 1]],
-                ['recovered_total', tot_recovered[days - 1]],
-                ['confirmed_latest', inc_confirmed[days - 1]],
-                ['deaths_latest', inc_deaths[days - 1]],
-                ['recovered_latest', inc_recovered[days - 1]],
-                ['cfr_total', tot_deaths[days - 1] /
-                    float(tot_confirmed[days - 1]) * 100],
+    for i in [  ['confirmed_total', tot_confirmed[li]],
+                ['deaths_total', tot_deaths[li]],
+                ['recovered_total', tot_recovered[li]],
+                ['confirmed_latest', inc_confirmed[li]],
+                ['deaths_latest', inc_deaths[li]],
+                ['recovered_latest', inc_recovered[li]],
+                ['cfr_total', cfr_total],
                 ['last_update', int(time.time())]]:
         insert_value(cur, i[0], i[1])
 
@@ -137,9 +146,9 @@ def get_dates(a, dates):
     while i < len(a[0]):
         d = a[0][i].split('/')
         dt = datetime.datetime(int(d[2]) + 2000, int(d[0]), int(d[1]), 0, 0)
-        timestamp = int(time.mktime(dt.timetuple()))
 
-        dates.append(timestamp)
+        dates.append(int(time.mktime(dt.timetuple())))
+
         i += 1
 
 def get_data(stat, cases, dates):
