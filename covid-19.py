@@ -14,7 +14,7 @@ import psycopg2
 import MySQLdb
 
 class CountryData:
-    confirmed = deaths = []
+    confirmed = deaths = recovered = []
 
 def main():
     cases = {}
@@ -23,7 +23,7 @@ def main():
     if sys.argv[1] == 'update-cases':
         conn = make_conn('credentials')
 
-        for t in ['confirmed', 'deaths']:
+        for t in ['confirmed', 'deaths', 'recovered']:
             get_data(t, cases, dates)
 
         update_cases(cases, dates, conn)
@@ -53,11 +53,11 @@ def update_cases(cases, dates, conn):
 
     inc_confirmed = [0] * days
     inc_deaths = [0] * days
-    #inc_recovered = [0] * days
+    inc_recovered = [0] * days
 
     tot_confirmed = [0] * days
     tot_deaths = [0] * days
-    #tot_recovered = [0] * days
+    tot_recovered = [0] * days
 
     for key, value in cases.items():
         print 'inserting ' + str(days) + ' values for ' + key
@@ -69,19 +69,19 @@ def update_cases(cases, dates, conn):
 
             confirmed = value.confirmed[i]
             deaths = value.deaths[i]
-            #recovered = value.recovered[i]
+            recovered = value.recovered[i]
 
             new_confirmed = confirmed - prev_confirmed
             new_deaths = deaths - prev_deaths
-            #new_recovered = recovered - prev_recovered
+            new_recovered = recovered - prev_recovered
 
             inc_confirmed[i] += new_confirmed
             inc_deaths[i] += new_deaths
-            #inc_recovered[i] += new_recovered
+            inc_recovered[i] += new_recovered
 
             tot_confirmed[i] += confirmed
             tot_deaths[i] += deaths
-            #tot_recovered[i] += recovered
+            tot_recovered[i] += recovered
 
             try:
                 cfr = deaths / float(confirmed) * 100
@@ -90,23 +90,23 @@ def update_cases(cases, dates, conn):
 
             cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
                 cfr, new_confirmed, new_deaths, \
-                country, instance) VALUES (%s, %s, \
-                %s, %s, %s, %s, %s, 1)', (timestamp, confirmed, deaths,
-                cfr, new_confirmed, new_deaths, key))
+                country, instance, recovered, new_recovered) VALUES (%s, %s, \
+                %s, %s, %s, %s, %s, 1, %s, %s)', (timestamp, confirmed, deaths,
+                cfr, new_confirmed, new_deaths, key, recovered, new_recovered))
 
             prev_confirmed = confirmed
             prev_deaths = deaths
-            #prev_recovered = recovered
+            prev_recovered = recovered
 
     for i in range(days):
         d = dates[i]
 
         for j in [  ['inc_confirmed', inc_confirmed[i]],
                     ['inc_deaths', inc_deaths[i]],
-                    #['inc_recovered', inc_recovered[i]],
+                    ['inc_recovered', inc_recovered[i]],
                     ['tot_confirmed', tot_confirmed[i]],
-                    ['tot_deaths', tot_deaths[i]]]:
-                    #['tot_recovered', tot_recovered[i]]]:
+                    ['tot_deaths', tot_deaths[i]],
+                    ['tot_recovered', tot_recovered[i]]]:
             cur.execute('INSERT INTO daily(timestamp, type, value, \
             instance) VALUES (%s, %s, %s, 1)', (d, j[0], j[1],))
 
@@ -114,10 +114,10 @@ def update_cases(cases, dates, conn):
 
     cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
         cfr, new_confirmed, new_deaths, \
-        country, instance) VALUES (%s, %s, \
-        %s, %s, %s, %s, \'Global\', 1)', (dates[li], tot_confirmed[li],
+        country, instance, recovered, new_recovered) VALUES (%s, %s, \
+        %s, %s, %s, %s, \'Global\', 1, %s, %s)', (dates[li], tot_confirmed[li],
         tot_deaths[li], cfr_total, inc_confirmed[li],
-        inc_deaths[li]))
+        inc_deaths[li], tot_recovered[li], inc_recovered[li]))
 
     for v in [  'DELETE FROM daily WHERE instance = 0',
                 'UPDATE daily SET instance = 0 WHERE instance = 1',
@@ -127,10 +127,10 @@ def update_cases(cases, dates, conn):
 
     for i in [  ['confirmed_total', tot_confirmed[li]],
                 ['deaths_total', tot_deaths[li]],
-                #['recovered_total', tot_recovered[li]],
+                ['recovered_total', tot_recovered[li]],
                 ['confirmed_latest', inc_confirmed[li]],
                 ['deaths_latest', inc_deaths[li]],
-                #['recovered_latest', inc_recovered[li]],
+                ['recovered_latest', inc_recovered[li]],
                 ['cfr_total', cfr_total],
                 ['last_update', int(time.time())]]:
         insert_value(cur, i[0], i[1])
@@ -179,7 +179,7 @@ def get_data(stat, cases, dates):
                 cases[c] = CountryData()
                 cases[c].confirmed = [0] * (lb-4)
                 cases[c].deaths = [0] * (lb-4)
-                #cases[c].recovered = [0] * (lb-4)
+                cases[c].recovered = [0] * (lb-4)
 
             while j < lb:
                 try:
@@ -190,11 +190,11 @@ def get_data(stat, cases, dates):
 
                 if stat == 'confirmed':
                     cases[c].confirmed[z] += v
-                #elif stat == 'Deaths':
-                #    cases[c].deaths[z] += v
-                else:
+                elif stat == 'deaths':
                     cases[c].deaths[z] += v
-                    #cases[c].recovered[z] += v
+                else:
+                    cases[c].recovered[z] += v
+
 
                 j += 1
                 z += 1
@@ -236,10 +236,10 @@ def create_tables(conn):
             "ALTER TABLE cases ADD COLUMN timestamp INT",
             "ALTER TABLE cases ADD COLUMN confirmed INT",
             "ALTER TABLE cases ADD COLUMN deaths INT",
-            #"ALTER TABLE cases ADD COLUMN recovered INT",
+            "ALTER TABLE cases ADD COLUMN recovered INT",
             "ALTER TABLE cases ADD COLUMN new_confirmed INT",
             "ALTER TABLE cases ADD COLUMN new_deaths INT",
-            #"ALTER TABLE cases ADD COLUMN new_recovered INT",
+            "ALTER TABLE cases ADD COLUMN new_recovered INT",
             "ALTER TABLE cases ADD COLUMN cfr FLOAT",
             "ALTER TABLE cases ADD COLUMN instance INT",
 
