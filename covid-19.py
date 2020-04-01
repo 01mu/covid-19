@@ -12,6 +12,9 @@ import datetime
 import time
 import psycopg2
 import MySQLdb
+from ago import human
+from datetime import datetime
+from datetime import timedelta
 
 class CountryData:
     confirmed = deaths = recovered = []
@@ -20,8 +23,43 @@ def main():
     cases = {}
     dates = []
 
+    conn = make_conn('credentials')
+
+    if sys.argv[1] == 'cases':
+        cur = conn.cursor()
+
+        try:
+            if sys.argv[3] == '-r':
+                p = 'recovered, new_recovered'
+            elif sys.argv[3] == '-d':
+                p = 'deaths, new_deaths'
+            else:
+                p = 'confirmed, new_confirmed'
+        except:
+            p = 'confirmed, new_confirmed'
+
+        cur.execute('SELECT ' + p + ' FROM cases WHERE country = %s \
+            ORDER BY timestamp DESC LIMIT 1', (sys.argv[2],))
+
+        res = cur.fetchall()[0]
+
+        try:
+            if sys.argv[4] == '-t':
+                print str(res[0])
+            else:
+                print str(res[1])
+        except:
+             print str(res[0])
+
+    if sys.argv[1] == 'ago':
+        cur = conn.cursor()
+
+        cur.execute('SELECT input_value FROM key_values WHERE input_key = \
+            \'last_update\'')
+
+        print human(cur.fetchone()[0])
+
     if sys.argv[1] == 'update-cases':
-        conn = make_conn('credentials')
 
         for t in ['confirmed', 'deaths', 'recovered']:
             get_data(t, cases, dates)
@@ -29,12 +67,9 @@ def main():
         update_cases(cases, dates, conn)
 
     if sys.argv[1] == 'create-tables':
-        conn = make_conn('credentials')
         create_tables(conn)
 
     if sys.argv[1] == 'clear-tables':
-        conn = make_conn('credentials')
-
         for v in ['cases', 'daily', 'key_values']:
             conn.cursor().execute('DELETE FROM ' + v)
 
@@ -195,7 +230,6 @@ def get_data(stat, cases, dates):
                 else:
                     cases[c].recovered[z] += v
 
-
                 j += 1
                 z += 1
 
@@ -231,27 +265,25 @@ def read_file(file_name):
 def create_tables(conn):
     cur = conn.cursor()
 
-    cmds = ["CREATE TABLE cases(id SERIAL PRIMARY KEY)",
-            "ALTER TABLE cases ADD COLUMN country TEXT",
-            "ALTER TABLE cases ADD COLUMN timestamp INT",
-            "ALTER TABLE cases ADD COLUMN confirmed INT",
-            "ALTER TABLE cases ADD COLUMN deaths INT",
-            "ALTER TABLE cases ADD COLUMN recovered INT",
-            "ALTER TABLE cases ADD COLUMN new_confirmed INT",
-            "ALTER TABLE cases ADD COLUMN new_deaths INT",
-            "ALTER TABLE cases ADD COLUMN new_recovered INT",
-            "ALTER TABLE cases ADD COLUMN cfr FLOAT",
-            "ALTER TABLE cases ADD COLUMN instance INT",
-
-            "CREATE TABLE daily(id SERIAL PRIMARY KEY)",
-            "ALTER TABLE daily ADD COLUMN timestamp INT",
-            "ALTER TABLE daily ADD COLUMN type TEXT",
-            "ALTER TABLE daily ADD COLUMN value INT",
-            "ALTER TABLE daily ADD COLUMN instance INT",
-
-            "CREATE TABLE key_values(id SERIAL PRIMARY KEY)",
-            "ALTER TABLE key_values ADD COLUMN input_key TEXT",
-            "ALTER TABLE key_values ADD COLUMN input_value TEXT",]
+    cmds = ["CREATE TABLE cases(id SERIAL PRIMARY KEY, \
+                country TEXT, \
+                timestamp INT, \
+                confirmed INT, \
+                deaths INT, \
+                recovered INT, \
+                new_confirmed INT, \
+                new_deaths INT, \
+                new_recovered INT, \
+                cfr FLOAT, \
+                instance INT);",
+            "CREATE TABLE daily(id SERIAL PRIMARY KEY, \
+                timestamp INT, \
+                type TEXT, \
+                value INT, \
+                instance INT);",
+            "CREATE TABLE key_values(id SERIAL PRIMARY KEY, \
+                input_key TEXT, \
+                input_value TEXT);"]
 
     for cmd in cmds:
         try:
