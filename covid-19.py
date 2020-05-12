@@ -13,8 +13,6 @@ import time
 import psycopg2
 import MySQLdb
 from ago import human
-from datetime import datetime
-from datetime import timedelta
 
 class CountryData:
     confirmed = deaths = recovered = []
@@ -41,15 +39,15 @@ def main():
         cur.execute('SELECT ' + p + ' FROM cases WHERE country = %s \
             ORDER BY timestamp DESC LIMIT 1', (sys.argv[2],))
 
-        res = cur.fetchall()[0]
+        res = cur.fetchone()
 
         try:
             if sys.argv[4] == '-t':
-                print str(res[0])
+                print(str(res[0]))
             else:
-                print str(res[1])
+                print(str(res[1]))
         except:
-             print str(res[0])
+             print(str(res[0]))
 
     if sys.argv[1] == 'ago':
         cur = conn.cursor()
@@ -57,7 +55,7 @@ def main():
         cur.execute('SELECT input_value FROM key_values WHERE input_key = \
             \'last_update\'')
 
-        print human(cur.fetchone()[0])
+        print(human(cur.fetchone()[0]))
 
     if sys.argv[1] == 'update-cases':
 
@@ -73,10 +71,17 @@ def main():
         for v in ['cases', 'daily', 'key_values']:
             conn.cursor().execute('DELETE FROM ' + v)
 
-            print v + ' cleared'
+            print(v + ' cleared')
 
         conn.commit()
 
+def zero_exp(a, b):
+    try:
+        val = a / float(b) * 100
+    except:
+        val = 0
+
+    return val
 def update_cases(cases, dates, conn):
     cur = conn.cursor()
 
@@ -95,13 +100,9 @@ def update_cases(cases, dates, conn):
     tot_recovered = [0] * days
 
     for key, value in cases.items():
-        print 'inserting ' + str(days) + ' values for ' + key
-
         prev_confirmed = prev_deaths =  prev_recovered = 0
 
         for i in range(len(value.confirmed)):
-            timestamp = dates[i]
-
             confirmed = value.confirmed[i]
             deaths = value.deaths[i]
             recovered = value.recovered[i]
@@ -118,16 +119,47 @@ def update_cases(cases, dates, conn):
             tot_deaths[i] += deaths
             tot_recovered[i] += recovered
 
-            try:
-                cfr = deaths / float(confirmed) * 100
-            except:
-                cfr = 0
+            prev_confirmed = confirmed
+            prev_deaths = deaths
+            prev_recovered = recovered
+
+    for key, value in cases.items():
+        print('Inserting ' + str(days) + ' values for ' + key)
+
+        prev_confirmed = prev_deaths =  prev_recovered = 0
+
+        for i in range(len(value.confirmed)):
+            timestamp = dates[i]
+
+            confirmed = value.confirmed[i]
+            deaths = value.deaths[i]
+            recovered = value.recovered[i]
+
+            new_confirmed = confirmed - prev_confirmed
+            new_deaths = deaths - prev_deaths
+            new_recovered = recovered - prev_recovered
+
+            confirmed_per = zero_exp(confirmed, tot_confirmed[i])
+            deaths_per = zero_exp(deaths, tot_deaths[i])
+            recovered_per = zero_exp(recovered, tot_recovered[i])
+
+            new_confirmed_per = zero_exp(new_confirmed, inc_confirmed[i])
+            new_deaths_per = zero_exp(new_deaths, inc_deaths[i])
+            new_recovered_per = zero_exp(new_recovered, inc_recovered[i])
+
+            cfr = zero_exp(deaths, confirmed)
 
             cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
                 cfr, new_confirmed, new_deaths, \
-                country, instance, recovered, new_recovered) VALUES (%s, %s, \
-                %s, %s, %s, %s, %s, 1, %s, %s)', (timestamp, confirmed, deaths,
-                cfr, new_confirmed, new_deaths, key, recovered, new_recovered))
+                country, instance, recovered, new_recovered, \
+                confirmed_per, deaths_per, recovered_per, \
+                new_confirmed_per, new_deaths_per, new_recovered_per) \
+                VALUES (%s, %s, \
+                %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s)',
+                (timestamp, confirmed, deaths, cfr, new_confirmed, new_deaths,
+                key, recovered, new_recovered, confirmed_per,
+                deaths_per, recovered_per, new_confirmed_per,
+                new_deaths_per, new_recovered_per))
 
             prev_confirmed = confirmed
             prev_deaths = deaths
@@ -265,33 +297,25 @@ def read_file(file_name):
 def create_tables(conn):
     cur = conn.cursor()
 
-    cmds = ["CREATE TABLE cases(id SERIAL PRIMARY KEY, \
-                country TEXT, \
-                timestamp INT, \
-                confirmed INT, \
-                deaths INT, \
-                recovered INT, \
-                new_confirmed INT, \
-                new_deaths INT, \
-                new_recovered INT, \
-                cfr FLOAT, \
-                instance INT);",
-            "CREATE TABLE daily(id SERIAL PRIMARY KEY, \
-                timestamp INT, \
-                type TEXT, \
-                value INT, \
-                instance INT);",
-            "CREATE TABLE key_values(id SERIAL PRIMARY KEY, \
-                input_key TEXT, \
+    cmds = ["CREATE TABLE cases(id SERIAL PRIMARY KEY, country TEXT, \
+                timestamp INT, confirmed INT, deaths INT, recovered INT, \
+                new_confirmed INT, new_deaths INT, new_recovered INT, \
+                cfr FLOAT, instance INT, confirmed_per FLOAT, \
+                deaths_per FLOAT, recovered_per FLOAT, \
+                new_confirmed_per FLOAT, new_deaths_per FLOAT, \
+                new_recovered_per FLOAT);",
+            "CREATE TABLE daily(id SERIAL PRIMARY KEY, timestamp INT, \
+                type TEXT, value INT, instance INT);",
+            "CREATE TABLE key_values(id SERIAL PRIMARY KEY, input_key TEXT, \
                 input_value TEXT);"]
 
     for cmd in cmds:
         try:
-            print cmd
+            print(cmd)
             cur.execute(cmd)
         except Exception as e:
             conn.rollback()
-            print e
+            print(e)
             continue
 
     conn.commit()
@@ -303,12 +327,12 @@ def insert_value(cur, key, value):
         q = 'INSERT INTO key_values (input_key, input_value) VALUES (%s, %s)'
         vals = (key, value)
 
-        print 'insert: ' + str(vals)
+        print('insert: ' + str(vals))
     else:
         q = 'UPDATE key_values SET input_value = %s WHERE input_key = %s'
         vals = (value, key)
 
-        print 'update: ' + str(vals)
+        print('Update: ' + str(vals))
 
     cur.execute(q, vals)
 
