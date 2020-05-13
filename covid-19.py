@@ -27,11 +27,11 @@ def main():
         cur = conn.cursor()
 
         try:
-            if sys.argv[3] == '-r':
+            if sys.argv[3] == '-recovered':
                 p = 'recovered, new_recovered'
-            elif sys.argv[3] == '-d':
+            elif sys.argv[3] == '-deaths':
                 p = 'deaths, new_deaths'
-            else:
+            elif sys.argv[3] == '-confirmed':
                 p = 'confirmed, new_confirmed'
         except:
             p = 'confirmed, new_confirmed'
@@ -42,9 +42,9 @@ def main():
         res = cur.fetchone()
 
         try:
-            if sys.argv[4] == '-t':
+            if sys.argv[4] == '-total':
                 print(str(res[0]))
-            else:
+            elif sys.argv[4] == '-new':
                 print(str(res[1]))
         except:
              print(str(res[0]))
@@ -59,10 +59,19 @@ def main():
 
     if sys.argv[1] == 'update-cases':
 
+        for stat in ['confirmed', 'deaths', 'recovered']:
+            if get_update_data(conn, stat, cases, dates) == False:
+                print('No new data')
+                return
+
+        update_cases(cases, dates, conn)
+
+    if sys.argv[1] == 'init-cases':
+
         for t in ['confirmed', 'deaths', 'recovered']:
             get_data(t, cases, dates)
 
-        update_cases(cases, dates, conn)
+        init_cases(cases, dates, conn)
 
     if sys.argv[1] == 'create-tables':
         create_tables(conn)
@@ -75,6 +84,123 @@ def main():
 
         conn.commit()
 
+def get_update_data(conn, stat, cases, dates):
+    cur = conn.cursor()
+
+    open('data', 'wb').write(requests.get((
+        'https://raw.githubusercontent.com/CSSEGISandData/COVID-19/' +
+        'master/csse_covid_19_data/csse_covid_19_time_series/' +
+        'time_series_covid19_') + stat + '_global.csv').content)
+
+    with open('data') as csvfile:
+        a = list(csv.reader(csvfile, delimiter=',', quotechar='"'))
+        i = 1
+
+        if stat == 'confirmed':
+            get_dates(a, dates)
+
+            cur.execute('SELECT timestamp FROM cases ORDER BY timestamp \
+                DESC LIMIT 1')
+
+            if dates[-1] == cur.fetchone()[0]:
+                return False
+
+        while i < len(a):
+            country = a[i][1]
+            v = int(a[i][-1])
+
+            if country not in cases:
+                cases[country] = CountryData()
+                cases[country].confirmed = [0] * 1
+                cases[country].deaths = [0] * 1
+                cases[country].recovered = [0] * 1
+
+            if stat == 'confirmed':
+                cases[country].confirmed[0] += v
+            elif stat == 'deaths':
+                cases[country].deaths[0] += v
+            else:
+                cases[country].recovered[0] += v
+
+            i += 1
+
+    return True
+
+def update_cases(cases, dates, conn):
+    cur = conn.cursor()
+
+    cur.execute('SELECT timestamp FROM cases ORDER BY timestamp \
+        DESC LIMIT 1')
+
+    last_timestamp = cur.fetchone()[0]
+    new_timestamp = dates[-1]
+
+    # Get total stats from database (excluding new update data)
+    cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
+        FROM cases WHERE timestamp = %s', (last_timestamp,))
+
+    res = cur.fetchall()[0]
+
+    db_confirmed_sum = res[0]
+    db_deaths_sum = res[1]
+    db_recovered_sum = res[2]
+
+    # Get total stats from the latest update (excluding database data)
+    recent_confirmed_sum = recent_deaths_sum = recent_recovered_sum = 0
+
+    for key, value in cases.items():
+        recent_confirmed_sum += value.confirmed[0]
+        recent_deaths_sum += value.deaths[0]
+        recent_recovered_sum += value.recovered[0]
+
+    # New total stats for day (all countries)
+    all_confirmed_new = recent_confirmed_sum - db_confirmed_sum
+    all_deaths_new = recent_deaths_sum - db_deaths_sum
+    all_recovered_new = recent_recovered_sum - db_recovered_sum
+
+    # Get country specific data
+    for key, value in cases.items():
+        print('Inserting update for ' + key)
+
+        cur.execute('SELECT confirmed, deaths, recovered FROM cases WHERE \
+            country = %s AND timestamp = %s', (key, last_timestamp,))
+
+        # Data from the day before the update
+        res = cur.fetchall()[0]
+
+        # Data from the latest update
+        recent_confirmed = value.confirmed[0]
+        recent_deaths = value.deaths[0]
+        recent_recovered = value.recovered[0]
+
+        # New data
+        new_confirmed = recent_confirmed - res[0]
+        new_deaths = recent_deaths - res[1]
+        new_recovered = recent_recovered - res[2]
+
+        # Percentage specific
+        deaths_per = zero_exp(recent_deaths, recent_deaths_sum)
+        new_deaths_per = zero_exp(new_deaths, all_deaths_new)
+
+        confirmed_per = zero_exp(recent_confirmed, recent_confirmed_sum)
+        new_confirmed_per = zero_exp(new_confirmed, all_confirmed_new)
+
+        recovered_per = zero_exp(recent_recovered, recent_recovered_sum)
+        new_recovered_per = zero_exp(new_recovered, all_recovered_new)
+
+        cur.execute('INSERT INTO cases (timestamp, country, confirmed, \
+            deaths, recovered, new_confirmed, new_deaths, new_recovered, \
+            confirmed_per, deaths_per, recovered_per, new_confirmed_per, \
+            new_deaths_per, new_recovered_per) VALUES (%s, %s, %s, \
+            %s, %s, %s, %s, %s, \
+            %s, %s, %s, %s, \
+            %s, %s)', (new_timestamp, key,
+            recent_confirmed, recent_deaths, recent_recovered, new_confirmed,
+            new_deaths, new_recovered, confirmed_per, deaths_per, recovered_per,
+            new_recovered_per, new_deaths_per, new_recovered_per))
+
+    conn.commit()
+
 def zero_exp(a, b):
     try:
         val = a / float(b) * 100
@@ -82,7 +208,8 @@ def zero_exp(a, b):
         val = 0
 
     return val
-def update_cases(cases, dates, conn):
+
+def init_cases(cases, dates, conn):
     cur = conn.cursor()
 
     confirmed = deaths = recovered = 0
@@ -202,11 +329,11 @@ def update_cases(cases, dates, conn):
                 ['last_update', int(time.time())]]:
         insert_value(cur, i[0], i[1])
 
-    for i in [  ['Taiwan', 'Taiwan*'],
+    '''for i in [  ['Taiwan', 'Taiwan*'],
                 ['United States', 'US'],
                 ['South Korea', 'Korea, South']]:
         cur.execute("UPDATE cases SET country = '" + i[0] + " \
-            ' WHERE country = '" + i[1] + "'")
+            ' WHERE country = '" + i[1] + "'")'''
 
     conn.commit()
 
@@ -230,7 +357,6 @@ def get_data(stat, cases, dates):
     with open('data') as csvfile:
         a = list(csv.reader(csvfile, delimiter=',', quotechar='"'))
         i = 1
-        prev_v = 0
 
         if stat == 'confirmed':
             get_dates(a, dates)
@@ -238,29 +364,25 @@ def get_data(stat, cases, dates):
         while i < len(a):
             b = list(a[i])
             lb = len(b)
-            c = a[i][1]
+            country = a[i][1]
             j = 4
             z = 0
 
-            if c not in cases:
-                cases[c] = CountryData()
-                cases[c].confirmed = [0] * (lb-4)
-                cases[c].deaths = [0] * (lb-4)
-                cases[c].recovered = [0] * (lb-4)
+            if country not in cases:
+                cases[country] = CountryData()
+                cases[country].confirmed = [0] * (lb-4)
+                cases[country].deaths = [0] * (lb-4)
+                cases[country].recovered = [0] * (lb-4)
 
             while j < lb:
-                try:
-                    v = int(b[j])
-                    prev_v = v
-                except:
-                    v = prev_v
+                v = int(b[j])
 
                 if stat == 'confirmed':
-                    cases[c].confirmed[z] += v
+                    cases[country].confirmed[z] += v
                 elif stat == 'deaths':
-                    cases[c].deaths[z] += v
+                    cases[country].deaths[z] += v
                 else:
-                    cases[c].recovered[z] += v
+                    cases[country].recovered[z] += v
 
                 j += 1
                 z += 1
@@ -297,16 +419,16 @@ def read_file(file_name):
 def create_tables(conn):
     cur = conn.cursor()
 
-    cmds = ["CREATE TABLE cases(id SERIAL PRIMARY KEY, country TEXT, \
+    cmds = ["CREATE TABLE cases(country PRIMARY KEY TEXT, \
                 timestamp INT, confirmed INT, deaths INT, recovered INT, \
                 new_confirmed INT, new_deaths INT, new_recovered INT, \
                 cfr FLOAT, instance INT, confirmed_per FLOAT, \
                 deaths_per FLOAT, recovered_per FLOAT, \
                 new_confirmed_per FLOAT, new_deaths_per FLOAT, \
                 new_recovered_per FLOAT);",
-            "CREATE TABLE daily(id SERIAL PRIMARY KEY, timestamp INT, \
+            "CREATE TABLE daily(timestamp INT, \
                 type TEXT, value INT, instance INT);",
-            "CREATE TABLE key_values(id SERIAL PRIMARY KEY, input_key TEXT, \
+            "CREATE TABLE key_values(input_key TEXT, \
                 input_value TEXT);"]
 
     for cmd in cmds:
@@ -321,13 +443,13 @@ def create_tables(conn):
     conn.commit()
 
 def insert_value(cur, key, value):
-    cur.execute('SELECT id FROM key_values WHERE input_key = %s', (key,))
+    cur.execute('SELECT * FROM key_values WHERE input_key = %s', (key,))
 
     if cur.fetchone() == None:
         q = 'INSERT INTO key_values (input_key, input_value) VALUES (%s, %s)'
         vals = (key, value)
 
-        print('insert: ' + str(vals))
+        print('Insert: ' + str(vals))
     else:
         q = 'UPDATE key_values SET input_value = %s WHERE input_key = %s'
         vals = (value, key)
