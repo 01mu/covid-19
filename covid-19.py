@@ -188,16 +188,49 @@ def update_cases(cases, dates, conn):
         recovered_per = zero_exp(recent_recovered, recent_recovered_sum)
         new_recovered_per = zero_exp(new_recovered, all_recovered_new)
 
+        cfr = zero_exp(recent_deaths, recent_confirmed)
+
         cur.execute('INSERT INTO cases (timestamp, country, confirmed, \
             deaths, recovered, new_confirmed, new_deaths, new_recovered, \
             confirmed_per, deaths_per, recovered_per, new_confirmed_per, \
-            new_deaths_per, new_recovered_per) VALUES (%s, %s, %s, \
+            new_deaths_per, new_recovered_per, cfr) VALUES (%s, %s, %s, \
             %s, %s, %s, %s, %s, \
             %s, %s, %s, %s, \
-            %s, %s)', (new_timestamp, key,
+            %s, %s, %s)', (new_timestamp, key,
             recent_confirmed, recent_deaths, recent_recovered, new_confirmed,
             new_deaths, new_recovered, confirmed_per, deaths_per, recovered_per,
-            new_recovered_per, new_deaths_per, new_recovered_per))
+            new_recovered_per, new_deaths_per, new_recovered_per, cfr))
+
+    print('Inserting update for Global')
+
+    cfr = zero_exp(recent_deaths_sum, recent_confirmed_sum)
+
+    q = 'UPDATE cases SET confirmed = %s, deaths = %s, recovered = %s, \
+        new_confirmed = %s, new_deaths = %s, new_recovered = %s, cfr = %s \
+        WHERE country = \'Global\''
+
+    cur.execute(q, (recent_confirmed_sum, recent_deaths_sum,
+        recent_recovered_sum, all_confirmed_new, all_deaths_new,
+        all_recovered_new, cfr))
+
+    for j in [  ['inc_confirmed', all_confirmed_new],
+                ['inc_deaths', all_deaths_new],
+                ['inc_recovered', all_recovered_new],
+                ['tot_confirmed', recent_confirmed_sum],
+                ['tot_deaths', recent_deaths_sum],
+                ['tot_recovered', recent_recovered_sum]]:
+        cur.execute('INSERT INTO daily(timestamp, type, value) \
+            VALUES (%s, %s, %s)', (new_timestamp, j[0], j[1],))
+
+    for i in [  ['confirmed_total', recent_confirmed_sum],
+                ['deaths_total', recent_deaths_sum],
+                ['recovered_total', recent_recovered_sum],
+                ['confirmed_latest', all_confirmed_new],
+                ['deaths_latest', all_deaths_new],
+                ['recovered_latest', all_recovered_new],
+                ['cfr_total', cfr],
+                ['last_update', int(time.time())]]:
+        insert_value(cur, i[0], i[1])
 
     conn.commit()
 
@@ -278,11 +311,11 @@ def init_cases(cases, dates, conn):
 
             cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
                 cfr, new_confirmed, new_deaths, \
-                country, instance, recovered, new_recovered, \
+                country, recovered, new_recovered, \
                 confirmed_per, deaths_per, recovered_per, \
                 new_confirmed_per, new_deaths_per, new_recovered_per) \
                 VALUES (%s, %s, \
-                %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, %s, %s)',
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
                 (timestamp, confirmed, deaths, cfr, new_confirmed, new_deaths,
                 key, recovered, new_recovered, confirmed_per,
                 deaths_per, recovered_per, new_confirmed_per,
@@ -301,23 +334,20 @@ def init_cases(cases, dates, conn):
                     ['tot_confirmed', tot_confirmed[i]],
                     ['tot_deaths', tot_deaths[i]],
                     ['tot_recovered', tot_recovered[i]]]:
-            cur.execute('INSERT INTO daily(timestamp, type, value, \
-            instance) VALUES (%s, %s, %s, 1)', (d, j[0], j[1],))
+            cur.execute('INSERT INTO daily(timestamp, type, value) \
+                VALUES (%s, %s, %s)', (d, j[0], j[1],))
 
     cfr_total = tot_deaths[li] / float(tot_confirmed[li]) * 100
 
     cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
         cfr, new_confirmed, new_deaths, \
-        country, instance, recovered, new_recovered) VALUES (%s, %s, \
-        %s, %s, %s, %s, \'Global\', 1, %s, %s)', (dates[li], tot_confirmed[li],
+        country, recovered, new_recovered, confirmed_per, \
+        deaths_per, recovered_per, new_confirmed_per, new_deaths_per, \
+        new_recovered_per) VALUES (%s, %s, \
+        %s, %s, %s, %s, \'Global\', %s, %s, 100, 100, 100, 100, 100, 100)',
+        (dates[li], tot_confirmed[li],
         tot_deaths[li], cfr_total, inc_confirmed[li],
         inc_deaths[li], tot_recovered[li], inc_recovered[li]))
-
-    for v in [  'DELETE FROM daily WHERE instance = 0',
-                'UPDATE daily SET instance = 0 WHERE instance = 1',
-                'DELETE FROM cases WHERE instance = 0',
-                'UPDATE cases SET instance = 0 WHERE instance = 1']:
-        cur.execute(v)
 
     for i in [  ['confirmed_total', tot_confirmed[li]],
                 ['deaths_total', tot_deaths[li]],
@@ -419,17 +449,14 @@ def read_file(file_name):
 def create_tables(conn):
     cur = conn.cursor()
 
-    cmds = ["CREATE TABLE cases(country PRIMARY KEY TEXT, \
-                timestamp INT, confirmed INT, deaths INT, recovered INT, \
+    cmds = ["CREATE TABLE cases(country TEXT, timestamp INT, \
+                confirmed INT, deaths INT, recovered INT, \
                 new_confirmed INT, new_deaths INT, new_recovered INT, \
-                cfr FLOAT, instance INT, confirmed_per FLOAT, \
-                deaths_per FLOAT, recovered_per FLOAT, \
+                confirmed_per FLOAT, deaths_per FLOAT, recovered_per FLOAT, \
                 new_confirmed_per FLOAT, new_deaths_per FLOAT, \
-                new_recovered_per FLOAT);",
-            "CREATE TABLE daily(timestamp INT, \
-                type TEXT, value INT, instance INT);",
-            "CREATE TABLE key_values(input_key TEXT, \
-                input_value TEXT);"]
+                new_recovered_per FLOAT, cfr FLOAT);",
+            "CREATE TABLE daily(timestamp INT, type TEXT, value INT);",
+            "CREATE TABLE key_values(input_key TEXT, input_value TEXT);"]
 
     for cmd in cmds:
         try:
