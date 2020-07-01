@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 #
 # covid-19
 # github.com/01mu
@@ -12,6 +10,7 @@ import datetime
 import time
 import psycopg2
 import MySQLdb
+
 from ago import human
 
 class CountryData:
@@ -27,11 +26,11 @@ def main():
         cur = conn.cursor()
 
         try:
-            if sys.argv[3] == '-recovered':
+            if sys.argv[3] == '-r':
                 p = 'recovered, new_recovered'
-            elif sys.argv[3] == '-deaths':
+            elif sys.argv[3] == '-d':
                 p = 'deaths, new_deaths'
-            elif sys.argv[3] == '-confirmed':
+            elif sys.argv[3] == '-c':
                 p = 'confirmed, new_confirmed'
         except:
             p = 'confirmed, new_confirmed'
@@ -42,9 +41,9 @@ def main():
         res = cur.fetchone()
 
         try:
-            if sys.argv[4] == '-total':
+            if sys.argv[4] == '-t':
                 print(str(res[0]))
-            elif sys.argv[4] == '-new':
+            elif sys.argv[4] == '-n':
                 print(str(res[1]))
         except:
              print(str(res[0]))
@@ -135,7 +134,6 @@ def update_cases(cases, dates, conn):
     last_timestamp = cur.fetchone()[0]
     new_timestamp = dates[-1]
 
-    # Get total stats from database (excluding new update data)
     cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
         FROM cases WHERE timestamp = %s', (last_timestamp,))
 
@@ -145,7 +143,6 @@ def update_cases(cases, dates, conn):
     db_deaths_sum = res[1]
     db_recovered_sum = res[2]
 
-    # Get total stats from the latest update (excluding database data)
     recent_confirmed_sum = recent_deaths_sum = recent_recovered_sum = 0
 
     for key, value in cases.items():
@@ -153,42 +150,36 @@ def update_cases(cases, dates, conn):
         recent_deaths_sum += value.deaths[0]
         recent_recovered_sum += value.recovered[0]
 
-    # New total stats for day (all countries)
     all_confirmed_new = recent_confirmed_sum - db_confirmed_sum
     all_deaths_new = recent_deaths_sum - db_deaths_sum
     all_recovered_new = recent_recovered_sum - db_recovered_sum
 
-    # Get country specific data
     for key, value in cases.items():
         print('Inserting update for ' + key)
 
         cur.execute('SELECT confirmed, deaths, recovered FROM cases WHERE \
             country = %s AND timestamp = %s', (key, last_timestamp,))
 
-        # Data from the day before the update
         res = cur.fetchall()[0]
 
-        # Data from the latest update
         recent_confirmed = value.confirmed[0]
         recent_deaths = value.deaths[0]
         recent_recovered = value.recovered[0]
 
-        # New data
         new_confirmed = recent_confirmed - res[0]
         new_deaths = recent_deaths - res[1]
         new_recovered = recent_recovered - res[2]
 
-        # Percentage specific
-        deaths_per = zero_exp(recent_deaths, recent_deaths_sum)
-        new_deaths_per = zero_exp(new_deaths, all_deaths_new)
-
-        confirmed_per = zero_exp(recent_confirmed, recent_confirmed_sum)
-        new_confirmed_per = zero_exp(new_confirmed, all_confirmed_new)
-
-        recovered_per = zero_exp(recent_recovered, recent_recovered_sum)
-        new_recovered_per = zero_exp(new_recovered, all_recovered_new)
-
-        cfr = zero_exp(recent_deaths, recent_confirmed)
+        v = (new_timestamp, key,
+            recent_confirmed, recent_deaths, recent_recovered,
+            new_confirmed, new_deaths, new_recovered,
+            zero_exp(recent_confirmed, recent_confirmed_sum),
+            zero_exp(recent_deaths, recent_deaths_sum),
+            zero_exp(recent_recovered, recent_recovered_sum),
+            zero_exp(new_confirmed, all_confirmed_new),
+            zero_exp(new_deaths, all_deaths_new),
+            zero_exp(new_recovered, all_recovered_new),
+            zero_exp(recent_deaths, recent_confirmed))
 
         cur.execute('INSERT INTO cases (timestamp, country, confirmed, \
             deaths, recovered, new_confirmed, new_deaths, new_recovered, \
@@ -196,22 +187,19 @@ def update_cases(cases, dates, conn):
             new_deaths_per, new_recovered_per, cfr) VALUES (%s, %s, %s, \
             %s, %s, %s, %s, %s, \
             %s, %s, %s, %s, \
-            %s, %s, %s)', (new_timestamp, key,
-            recent_confirmed, recent_deaths, recent_recovered, new_confirmed,
-            new_deaths, new_recovered, confirmed_per, deaths_per, recovered_per,
-            new_recovered_per, new_deaths_per, new_recovered_per, cfr))
+            %s, %s, %s)', v)
 
     print('Inserting update for Global')
 
     cfr = zero_exp(recent_deaths_sum, recent_confirmed_sum)
 
     q = 'UPDATE cases SET confirmed = %s, deaths = %s, recovered = %s, \
-        new_confirmed = %s, new_deaths = %s, new_recovered = %s, cfr = %s \
-        WHERE country = \'Global\''
+        new_confirmed = %s, new_deaths = %s, new_recovered = %s, cfr = %s, \
+        timestamp = %s WHERE country = \'Global\''
 
     cur.execute(q, (recent_confirmed_sum, recent_deaths_sum,
         recent_recovered_sum, all_confirmed_new, all_deaths_new,
-        all_recovered_new, cfr))
+        all_recovered_new, cfr, new_timestamp))
 
     for j in [  ['inc_confirmed', all_confirmed_new],
                 ['inc_deaths', all_deaths_new],
@@ -358,12 +346,6 @@ def init_cases(cases, dates, conn):
                 ['cfr_total', cfr_total],
                 ['last_update', int(time.time())]]:
         insert_value(cur, i[0], i[1])
-
-    '''for i in [  ['Taiwan', 'Taiwan*'],
-                ['United States', 'US'],
-                ['South Korea', 'Korea, South']]:
-        cur.execute("UPDATE cases SET country = '" + i[0] + " \
-            ' WHERE country = '" + i[1] + "'")'''
 
     conn.commit()
 
