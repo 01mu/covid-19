@@ -79,6 +79,12 @@ class COVID:
         cur.execute('SELECT timestamp FROM cases ORDER BY timestamp \
             DESC LIMIT 1')
 
+        if cur.fetchone()[0] == self.dates[-1]:
+            return
+
+        cur.execute('SELECT timestamp FROM cases ORDER BY timestamp \
+            DESC LIMIT 1')
+
         last_timestamp = cur.fetchone()[0]
         new_timestamp = self.dates[-1]
 

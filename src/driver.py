@@ -37,7 +37,7 @@ def init(conn):
 
 def update(conn):
     covid = COVID(conn)
-    covid.update_cases()
+    #covid.update_cases()
 
 if __name__ == '__main__':
     main()
