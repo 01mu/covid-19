@@ -4,30 +4,26 @@
 #
 
 import sys
-
-from conn import make_conn
 from ago import human
+from conn import make_conn
 from covid_19 import COVID
 
-conn = make_conn('../res/credentials')
+def main():
+    conn = make_conn('../res/credentials')
+    arg = sys.argv[1]
+
+    {'cases': cases, 'ago': ago, 'init': init, 'update': update}.get(arg)(conn)
 
 def cases(conn):
+    p = {'-r': 'recovered, new_recovered', '-d': 'deaths, new_deaths',
+        '-c': 'confirmed, new_confirmed'}.get(sys.argv[2],
+        'confirmed, new_confirmed')
     cur = conn.cursor()
-
-    try:
-        p = {'-r': 'recovered, new_recovered', '-d': 'deaths, new_deaths',
-            '-c': 'confirmed, new_confirmed'}.get(sys.argv[3])
-    except:
-        p = 'confirmed, new_confirmed'
-
     cur.execute('SELECT ' + p + ' FROM cases WHERE country = %s \
-        ORDER BY timestamp DESC LIMIT 1', (sys.argv[2], ))
+        ORDER BY timestamp DESC LIMIT 1', (sys.argv[4], ))
     res = cur.fetchone()
 
-    try:
-        print({'-t': str(res[0]), '-n': str(res[1])}.get(sys.argv[4]))
-    except:
-         print(str(res[0]))
+    print({'-t': str(res[0]), '-n': str(res[1])}.get(sys.argv[3], str(res[0])))
 
 def ago(conn):
     cur = conn.cursor()
@@ -43,5 +39,5 @@ def update(conn):
     covid = COVID(conn)
     covid.update_cases()
 
-{'cases': cases, 'ago': ago, 'init': init,
-    'update': update}.get(sys.argv[1])(conn)
+if __name__ == '__main__':
+    main()
