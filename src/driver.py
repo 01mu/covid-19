@@ -33,11 +33,13 @@ def ago(conn):
 
 def init(conn):
     covid = COVID(conn)
-    covid.init_cases()
+    covid.init_cases('countries')
+    covid.init_cases('states')
 
 def update(conn):
     covid = COVID(conn)
-    #covid.update_cases()
+    covid.update_cases('countries')
+    covid.update_cases('states')
 
 if __name__ == '__main__':
     main()
