@@ -146,14 +146,20 @@ class COVID:
         if last_timestamp == new_timestamp:
             return
 
-        cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
-            FROM ' + table + ' WHERE timestamp = %s', (last_timestamp,))
+        if region == 'countries':
+            cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
+                FROM cases WHERE timestamp = %s AND country != \'Global\'',
+                (last_timestamp,))
+            db_counts = cur.fetchall()[0]
+        else:
+            cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
+                FROM cocases_usunt WHERE timestamp = %s',
+                (last_timestamp,))
+            db_counts = cur.fetchall()[0]
 
-        res = cur.fetchall()[0]
-
-        db_confirmed_sum = res[0]
-        db_deaths_sum = res[1]
-        db_recovered_sum = res[2]
+        db_confirmed_sum = db_counts[0]
+        db_deaths_sum = db_counts[1]
+        db_recovered_sum = db_counts[2]
 
         recent_confirmed_sum = recent_deaths_sum = recent_recovered_sum = 0
 
