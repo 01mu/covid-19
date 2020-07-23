@@ -153,7 +153,7 @@ class COVID:
             db_counts = cur.fetchall()[0]
         else:
             cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
-                FROM cocases_usunt WHERE timestamp = %s',
+                FROM cases_us WHERE timestamp = %s',
                 (last_timestamp,))
             db_counts = cur.fetchall()[0]
 
