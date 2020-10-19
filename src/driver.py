@@ -12,7 +12,8 @@ def main():
     conn = make_conn('../res/credentials')
     arg = sys.argv[1]
 
-    {'cases': cases, 'ago': ago, 'init': init, 'update': update}.get(arg)(conn)
+    {'cases': cases, 'ago': ago, 'init': init, 'del': delete,
+        'update': update}.get(arg)(conn)
 
 def cases(conn):
     p = {'-r': 'recovered, new_recovered', '-d': 'deaths, new_deaths',
@@ -40,6 +41,14 @@ def update(conn):
     covid = COVID(conn)
     covid.update_cases('countries')
     covid.update_cases('states')
+
+def delete(conn):
+    cur = conn.cursor()
+    cur.execute('DELETE FROM cases')
+    cur.execute('DELETE FROM cases_us')
+    cur.execute('DELETE FROM daily')
+    cur.execute('DELETE FROM key_values')
+    conn.commit()
 
 if __name__ == '__main__':
     main()
