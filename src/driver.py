@@ -26,12 +26,47 @@ def read_file(file_name):
 def population(conn):
     cur = conn.cursor()
 
+    fix = {'United Kingdom of Great Britain and Northern Ireland':
+        'United Kingdom',
+        'Myanmar': 'Burma',
+        'Syrian Arab Republic': 'Syria',
+        'Venezuela (Bolivarian Republic of)': 'Venezuela',
+        'Swaziland': 'Eswatini',
+        'Republic of Kosovo': 'Kosovo',
+        'Moldova (Republic of)': 'Moldova',
+        'Czech Republic': 'Czechia',
+        'Iran (Islamic Republic of)': 'Iran',
+        'Brunei Darussalam': 'Brunei',
+        'Viet Nam': 'Vietnam',
+        'United States of America': 'United States',
+        'Russian Federation': 'Russia',
+        'Lao People\'s Democratic Republic': 'Laos',
+        'Korea (Republic of)': 'South Korea',
+        'Congo': 'Congo (Brazzaville)',
+        'Macedonia (the former Yugoslav Republic of)': 'North Macedonia',
+        'Tanzania, United Republic of': 'Tanzania',
+        'Congo (Democratic Republic of the)': 'Congo (Kinshasa)',
+        'Bolivia (Plurinational State of)': 'Bolivia'}
+
     countries = read_json('https://restcountries.eu/rest/v2/all')
 
     for country in countries:
+        country_ins = country['name']
+
+        if country['name'] in fix:
+            country_ins = fix[country_ins]
+
         q = 'INSERT INTO population (place, type, population) VALUES \
             (%s, %s, %s)'
-        cur.execute(q, (country['name'], 0, country['population']))
+        cur.execute(q, (country_ins, 0, country['population']))
+
+    q = 'INSERT INTO population (place, type, population) VALUES \
+        ("West Bank and Gaza", 0, 2747943)'
+    cur.execute(q)
+
+    q = 'INSERT INTO population (place, type, population) VALUES \
+        ("Global", 0, 7713468100)'
+    cur.execute(q)
 
     for state in read_file('../res/states'):
         split = state.split(',')

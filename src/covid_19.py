@@ -73,16 +73,17 @@ class COVID:
         with open('data') as csvfile:
             a = list(csv.reader(csvfile, delimiter=',', quotechar='"'))
             i = self.get_case_pos(stat, region)
+            d = 1
 
             self.get_dates(stat, region, a)
 
             while i < len(a):
-                b = list(a[i])
+                b = list(a[d])
                 lb = len(b)
                 z = 0
 
                 if region == 'countries':
-                    place = a[i][1]
+                    place = a[d][1]
                 else:
                     place = a[i][6]
 
@@ -122,6 +123,7 @@ class COVID:
                     j += 1
                     z += 1
 
+                d += 1
                 i += 1
 
     def update_cases(self, region):

@@ -12,4 +12,4 @@ CREATE TABLE cases_us(state TEXT, timestamp INT,
     new_recovered_per FLOAT, cfr FLOAT);
 CREATE TABLE daily(timestamp INT, type TEXT, value INT);
 CREATE TABLE key_values(input_key TEXT, input_value TEXT);
-CREATE TABLE population(place TEXT, type INT, population INT)
+CREATE TABLE population(place TEXT, type INT, population BIGINT)
