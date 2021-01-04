@@ -4,6 +4,8 @@
 #
 
 import sys
+import json
+import urllib
 from ago import human
 from conn import make_conn
 from covid_19 import COVID
@@ -13,7 +15,32 @@ def main():
     arg = sys.argv[1]
 
     {'cases': cases, 'ago': ago, 'init': init, 'del': delete,
-        'update': update}.get(arg)(conn)
+        'update': update, 'population': population}.get(arg)(conn)
+
+def read_json(page):
+    return json.loads(urllib.urlopen(page).read())
+
+def read_file(file_name):
+    return map(str.strip, open(file_name, 'r').readlines())
+
+def population(conn):
+    cur = conn.cursor()
+
+    countries = read_json('https://restcountries.eu/rest/v2/all')
+
+    for country in countries:
+        q = 'INSERT INTO population (place, type, population) VALUES \
+            (%s, %s, %s)'
+        cur.execute(q, (country['name'], 0, country['population']))
+
+    for state in read_file('../res/states'):
+        split = state.split(',')
+
+        q = 'INSERT INTO population (place, type, population) VALUES \
+            (%s, %s, %s)'
+        cur.execute(q, (split[0], 1, int(split[1])))
+
+    conn.commit()
 
 def cases(conn):
     p = {'-r': 'recovered, new_recovered', '-d': 'deaths, new_deaths',
