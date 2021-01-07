@@ -13,3 +13,7 @@ CREATE TABLE cases_us(state TEXT, timestamp INT,
 CREATE TABLE daily(timestamp INT, type TEXT, value INT);
 CREATE TABLE key_values(input_key TEXT, input_value TEXT);
 CREATE TABLE population(place TEXT, type INT, population BIGINT)
+CREATE TABLE news(place TEXT, title TEXT, source TEXT, url TEXT,
+    image TEXT, published INT)
+ALTER TABLE news MODIFY COLUMN title VARCHAR(255)
+    CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL
