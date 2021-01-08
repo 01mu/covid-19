@@ -73,7 +73,7 @@ def news(conn):
   last_update = cur.fetchone()
 
   if last_update != None:
-    last_update = last_update[0]
+    last_update = int(last_update[0])
 
   cur.execute('SELECT DISTINCT(state) FROM cases_us')
 
