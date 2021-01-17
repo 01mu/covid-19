@@ -41,9 +41,6 @@ def insert_articles(place, last_update, response, cur):
       cur.execute(q, (place, title, source, url, image, published, ))
 
 def get_place_articles(place, last_update, cur, api):
-  if place == 'New York':
-    place = 'New York State'
-
   url = ('https://newsapi.org/v2/everything?' +
     'qInTitle=(' + place + ')+(covid%20OR%20coronavirus)&pageSize=100' +
     '&language=en&sortBy=publishedAt&apiKey=' + api)
@@ -79,7 +76,6 @@ def news(conn):
 
   for state in cur.fetchall():
     get_place_articles(state[0], last_update, cur, api)
-    break
 
   cur.execute('SELECT country FROM cases WHERE timestamp = \
     (SELECT timestamp FROM cases ORDER BY timestamp DESC LIMIT 1) \
@@ -88,7 +84,6 @@ def news(conn):
 
   for country in cur.fetchall():
     get_place_articles(country[0], last_update, cur, api)
-    break
 
   url = ('https://newsapi.org/v2/everything?' +
     'qInTitle=(covid%20OR%20coronavirus)&pageSize=100' +
