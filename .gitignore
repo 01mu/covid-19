@@ -1,4 +1,5 @@
 src/data
+src/__pycache__
 res/credentials
 res/news
 *.pyc

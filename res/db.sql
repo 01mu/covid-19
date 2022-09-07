@@ -1,19 +1,29 @@
-CREATE TABLE cases(country TEXT, timestamp INT,
+CREATE database covid;
+
+USE covid;
+
+CREATE TABLE places(id BIGINT unsigned AUTO_INCREMENT, place TEXT,
+    place_type TEXT,
+    PRIMARY KEY(id));
+
+CREATE TABLE cases(place_id BIGINT unsigned, timestamp INT,
     confirmed INT, deaths INT, recovered INT,
     new_confirmed INT, new_deaths INT, new_recovered INT,
     confirmed_per FLOAT, deaths_per FLOAT, recovered_per FLOAT,
     new_confirmed_per FLOAT, new_deaths_per FLOAT,
-    new_recovered_per FLOAT, cfr FLOAT);
-CREATE TABLE cases_us(state TEXT, timestamp INT,
-    confirmed INT, deaths INT, recovered INT,
-    new_confirmed INT, new_deaths INT, new_recovered INT,
-    confirmed_per FLOAT, deaths_per FLOAT, recovered_per FLOAT,
-    new_confirmed_per FLOAT, new_deaths_per FLOAT,
-    new_recovered_per FLOAT, cfr FLOAT);
+    new_recovered_per FLOAT, cfr FLOAT,
+    FOREIGN KEY(place_id) REFERENCES places (id));
+
+CREATE TABLE population(place_id BIGINT unsigned, population BIGINT,
+    FOREIGN KEY(place_id) REFERENCES places (id));
+
+CREATE TABLE news(place_id BIGINT unsigned, title LONGTEXT, source TEXT,
+    url TEXT, image TEXT, published INT,
+    FOREIGN KEY(place_id) REFERENCES places (id));
+
 CREATE TABLE daily(timestamp INT, type TEXT, value INT);
+
 CREATE TABLE key_values(input_key TEXT, input_value TEXT);
-CREATE TABLE population(place TEXT, type INT, population BIGINT)
-CREATE TABLE news(place TEXT, title TEXT, source TEXT, url TEXT,
-    image TEXT, published INT)
-ALTER TABLE news MODIFY COLUMN title VARCHAR(255)
-    CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL
+
+ALTER TABLE news MODIFY COLUMN title LONGTEXT CHARACTER SET utf8 COLLATE
+    utf8_general_ci NOT NULL;

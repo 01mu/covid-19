@@ -1,0 +1,5 @@
+arrow==1.2.1
+psycopg2==2.9.3
+psycopg2_binary==2.9.3
+PyMySQL==1.0.2
+requests==2.22.0
