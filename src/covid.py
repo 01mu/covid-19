@@ -362,21 +362,44 @@ def init_cases(conn, place_type, cases, dates, place_ids):
       prev_deaths = deaths
       prev_recovered = recovered
 
+    print('Inserting place_list value for ' + key)
+
+    cur.execute('INSERT INTO place_list (confirmed, \
+      deaths, cfr, new_confirmed, new_deaths, \
+      recovered, new_recovered, \
+      confirmed_per, deaths_per, recovered_per, \
+      new_confirmed_per, new_deaths_per, new_recovered_per, place_id) \
+      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)',
+      (confirmed, deaths, cfr, new_confirmed,
+      new_deaths, recovered, new_recovered, confirmed_per,
+      deaths_per, recovered_per, new_confirmed_per,
+      new_deaths_per, new_recovered_per, place_ids[key],))
+
   if place_type == 'country':
-    print('Inserting update for Global')
+    for i in range(days):
+      print('Inserting value for Global [' + str(i) + ']')
 
-    li = days - 1
-    cfr_total = tot_deaths[li] / float(tot_confirmed[li]) * 100
+      cfr_total = tot_deaths[i] / float(tot_confirmed[i]) * 100
 
-    cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
-      cfr, new_confirmed, new_deaths, \
-      recovered, new_recovered, place_id, \
-      confirmed_per, deaths_per, recovered_per, new_confirmed_per, \
-      new_deaths_per, new_recovered_per) VALUES (%s, %s, \
-      %s, %s, %s, %s, %s, %s, %s, 100, 100, 100, 100, 100, 100)',
-      (dates[li], tot_confirmed[li], tot_deaths[li],
-      cfr_total, inc_confirmed[li], inc_deaths[li],
-      tot_recovered[li], inc_recovered[li], place_ids['Global'],))
+      cur.execute('INSERT INTO cases (timestamp, \
+        confirmed, deaths, recovered, cfr, \
+        new_confirmed, new_deaths, new_recovered, place_id, \
+        confirmed_per, deaths_per, recovered_per, new_confirmed_per, \
+        new_deaths_per, new_recovered_per) VALUES (%s, %s, \
+        %s, %s, %s, %s, %s, %s, %s, 100, 100, 100, 100, 100, 100)',
+        (dates[i], tot_confirmed[i], tot_deaths[i], tot_recovered[i],
+        cfr_total, inc_confirmed[i], inc_deaths[i], inc_recovered[i],
+        place_ids['Global'],))
+
+    print('Inserting place_list value for Global')
+
+    cur.execute('INSERT INTO place_list (confirmed, deaths, recovered, cfr, \
+      new_confirmed, new_deaths, new_recovered, place_id, \
+      confirmed_per, deaths_per, recovered_per, \
+      new_confirmed_per, new_deaths_per, new_recovered_per) \
+      VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 100, 100, 100, 100, 100, 100)',
+      (tot_confirmed[i], tot_deaths[i], tot_recovered[i], cfr_total,
+      inc_confirmed[i], inc_deaths[i], inc_recovered[i], place_ids['Global'],))
 
     for i in range(days):
       for j in [['inc_confirmed', inc_confirmed[i]],
@@ -391,12 +414,12 @@ def init_cases(conn, place_type, cases, dates, place_ids):
         cur.execute(q, v)
         print('Insert daily: ' + str(v))
 
-    for i in [['confirmed_latest', inc_confirmed[li]],
-        ['deaths_latest', inc_deaths[li]],
-        ['recovered_latest', inc_recovered[li]],
-        ['confirmed_total', tot_confirmed[li]],
-        ['deaths_total', tot_deaths[li]],
-        ['recovered_total', tot_recovered[li]],
+    for i in [['confirmed_latest', inc_confirmed[i]],
+        ['deaths_latest', inc_deaths[i]],
+        ['recovered_latest', inc_recovered[i]],
+        ['confirmed_total', tot_confirmed[i]],
+        ['deaths_total', tot_deaths[i]],
+        ['recovered_total', tot_recovered[i]],
         ['cfr_total', cfr_total],
         ['last_update', int(time.time())]
       ]:
@@ -423,19 +446,24 @@ def check_if_update_available(cur, dates, place_type):
 
   if last_timestamp == new_timestamp:
     print('No updates found: ' + str(new_timestamp))
-    return True
+    return (True, last_timestamp, new_timestamp)
 
-  return False
+  return (False, last_timestamp, new_timestamp)
 
 def update_cases(conn, place_type, cases, dates, place_ids):
   cur = conn.cursor()
+  check = check_if_update_available(cur, dates, place_type)
 
-  if check_if_update_available(cur, dates, place_type) == True:
+  if check[0] == True:
     return
+
+  last_timestamp = check[1]
+  new_timestamp = check[2]
 
   cur.execute('SELECT SUM(confirmed), SUM(deaths), SUM(recovered) \
     FROM cases INNER JOIN places ON cases.place_id = places.id \
-    WHERE timestamp = %s AND places.place_type = %s',
+    WHERE timestamp = %s AND places.place_type = %s \
+    AND places.place != "Global"',
     (last_timestamp, place_type,))
 
   db_counts = cur.fetchall()[0]
@@ -458,11 +486,13 @@ def update_cases(conn, place_type, cases, dates, place_ids):
   all_recovered_new = recent_recovered_sum - db_recovered_sum
 
   for key, value in cases.items():
-    print('Inserting update for ' + key)
+    print('Inserting cases update for ' + key)
+
+    place_id = place_ids[key]
 
     cur.execute('SELECT confirmed, deaths, recovered \
       FROM cases WHERE timestamp = %s AND place_id = %s',
-      (last_timestamp, place_ids[key],))
+      (last_timestamp, place_id,))
 
     res = cur.fetchall()[0]
 
@@ -495,17 +525,37 @@ def update_cases(conn, place_type, cases, dates, place_ids):
       new_deaths_per, new_recovered_per, cfr, place_id) VALUES (%s, %s, %s, \
       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)', v)
 
+    print('Updating place_list for ' + key)
+
+    cur.execute('UPDATE place_list SET confirmed = %s, \
+      deaths = %s, recovered = %s, new_confirmed = %s, new_deaths = %s, \
+      new_recovered = %s, confirmed_per = %s, deaths_per = %s, \
+      recovered_per = %s, new_confirmed_per = %s, new_deaths_per = %s, \
+      new_recovered_per = %s, cfr = %s WHERE place_id = %s', v[1:])
+
   if place_type == 'country':
     print('Inserting update for Global')
 
     cfr = perc(recent_deaths_sum, recent_confirmed_sum)
 
-    cur.execute('UPDATE cases SET confirmed = %s, deaths = %s, recovered = %s, \
-      new_confirmed = %s, new_deaths = %s, new_recovered = %s, cfr = %s, \
-      timestamp = %s WHERE place_id = %s', (recent_confirmed_sum,
-      recent_deaths_sum, recent_recovered_sum, all_confirmed_new,
-      all_deaths_new, all_recovered_new, cfr, new_timestamp,
-      place_ids['Global']))
+    cur.execute('INSERT INTO cases (timestamp, confirmed, deaths, \
+      recovered, cfr, new_confirmed, new_deaths, \
+      new_recovered, place_id, \
+      confirmed_per, deaths_per, recovered_per, new_confirmed_per, \
+      new_deaths_per, new_recovered_per) VALUES (%s, %s, \
+      %s, %s, %s, %s, %s, %s, %s, 100, 100, 100, 100, 100, 100)',
+      (new_timestamp, recent_confirmed_sum, recent_deaths_sum,
+      recent_recovered_sum, cfr, all_confirmed_new, all_deaths_new,
+      all_recovered_new, place_ids['Global'],))
+
+    print('Updating place_list value for Global')
+
+    cur.execute('UPDATE place_list SET confirmed = %s, deaths = %s, \
+      recovered = %s, cfr = %s, new_confirmed = %s, new_deaths = %s, \
+      new_recovered = %s WHERE place_id = %s',
+      (recent_confirmed_sum, recent_deaths_sum, recent_recovered_sum, cfr,
+        all_confirmed_new, all_deaths_new, all_recovered_new,
+      place_ids['Global'],))
 
     for j in [['inc_confirmed', all_confirmed_new],
         ['inc_deaths', all_deaths_new],
@@ -577,8 +627,10 @@ def insert_cases(conn, execute_type):
 
 def delete(conn):
   cur = conn.cursor()
+  tables = ['place_list', 'population', 'news', 'daily', 'key_values', 'cases',
+    'places']
 
-  for v in ['population', 'news', 'daily', 'key_values', 'cases', 'places']:
+  for v in tables:
     print('Deleting ' + v)
     cur.execute('DELETE FROM ' + v)
 
