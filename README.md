@@ -1,47 +1,40 @@
-# crypto
-Get [COVID-19 data](https://github.com/CSSEGISandData/COVID-19) and write it to a database.
+# covid.py
+Retrive [historical COVID-19 case information](https://github.com/CSSEGISandData/COVID-19) and write it to a MySQL database.
 ## Usage
-### Create tables
-Create tables after creating a `credentials` file based on `credentials_example`.
-| Table | Function |
-| --- | --- |
-| cases | Includes cumulative data and new cases by country for a given day |
-| daily | Includes daily increases and totals of data independent of country |
-| key_values | Stores confirmed, death, and recovery values |
+### Source database and add your credentials
+1. Create the tables listed in `res/db.sql`.
+2. Create `res/credentials` and include your database credentials.
+3. Create `res/news` and include your [News API](https://newsapi.org/) API key.
+### Initialize
+Pull data from [the John Hopkins Coronavirus Resource Center dataset](https://github.com/CSSEGISandData/COVID-19) and insert country and US state population figures.
 ```
-./covid-19.py create-tables
+cd covid-19/src
+python3 covid.py init
 ```
 ```
-CREATE TABLE cases(id SERIAL PRIMARY KEY)
-ALTER TABLE cases ADD COLUMN country TEXT
-ALTER TABLE cases ADD COLUMN timestamp INT
+Inserting states place IDs
+Inserting countries place IDs
+Inserting country populations
+Inserting state populations
+Inserting states case data for 04-12-2020
 ...
-CREATE TABLE key_values(id SERIAL PRIMARY KEY)
-ALTER TABLE key_values ADD COLUMN input_key TEXT
-ALTER TABLE key_values ADD COLUMN input_value TEXT
-
-```
-### Update cases
-Write data to tables.
-```
-./covid-19.py update-cases
-```
-```
-inserting 53 values for Canada
-inserting 53 values for Lithuania
-inserting 53 values for Cambodia
+Inserting countries case data for 01-21-2021
 ...
-update: (415, 'deaths_latest')
-update: (2373, 'recovered_latest')
-update: (3.7276908687909187, 'cfr_total')
+```
+### Update news articles from [News API](https://newsapi.org/)
+```
+cd covid-19/src
+python3 covid.py news
+```
+```
+Inserting US news
+Inserting country news
 ```
 ### Clear tables
-Delete table entries.
 ```
-./covid-19.py clear-tables
+cd covid-19/src
+python3 covid.py clear
 ```
 ```
-cases cleared
-daily cleared
-key_values cleared
+Tables cleared
 ```

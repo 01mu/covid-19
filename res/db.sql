@@ -6,9 +6,17 @@ CREATE TABLE places(id BIGINT unsigned AUTO_INCREMENT, place TEXT,
     place_type TEXT,
     PRIMARY KEY(id));
 
-CREATE TABLE cases(place_id BIGINT unsigned, timestamp INT,
-    confirmed INT, deaths INT, recovered INT,
-    new_confirmed INT, new_deaths INT, new_recovered INT,
+CREATE TABLE cases(place_id BIGINT unsigned, timestamp BIGINT,
+    confirmed BIGINT, deaths BIGINT, recovered BIGINT,
+    new_confirmed BIGINT, new_deaths BIGINT, new_recovered BIGINT,
+    confirmed_per FLOAT, deaths_per FLOAT, recovered_per FLOAT,
+    new_confirmed_per FLOAT, new_deaths_per FLOAT,
+    new_recovered_per FLOAT, cfr FLOAT,
+    FOREIGN KEY(place_id) REFERENCES places (id));
+
+CREATE TABLE place_list(place_id BIGINT unsigned,
+    confirmed BIGINT, deaths BIGINT, recovered BIGINT,
+    new_confirmed BIGINT, new_deaths BIGINT, new_recovered BIGINT,
     confirmed_per FLOAT, deaths_per FLOAT, recovered_per FLOAT,
     new_confirmed_per FLOAT, new_deaths_per FLOAT,
     new_recovered_per FLOAT, cfr FLOAT,
