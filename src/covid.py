@@ -320,11 +320,11 @@ def clear_tables(conn):
     cur = conn.cursor()
 
     cur.execute('DELETE FROM key_values;')
+    cur.execute('DELETE FROM news;')
     cur.execute('DELETE FROM population;')
     cur.execute('DELETE FROM place_list;')
     cur.execute('DELETE FROM cases;')
     cur.execute('DELETE FROM places;')
-    cur.execute('DELETE FROM news;')
 
     print('Tables cleared')
 
