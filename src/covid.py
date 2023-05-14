@@ -651,5 +651,48 @@ def main():
     news(conn)
   elif arg == 'population':
     population(conn)
+  elif arg == 'fix_final':
+    fix_final(conn)
+
+def fix_final(conn):
+  previous = {}
+  current = {}
+
+  cur = conn.cursor()
+
+  for i in range(8, 10):
+    print(i)
+    latest = ('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports_us/03-0' +
+      str(i) + '-2023.csv')
+
+    open('data', 'wb').write(requests.get(latest).content)
+
+    with open('data') as csvfile:
+      for v in list(csv.reader(csvfile, delimiter = ',', quotechar = '"')):
+        if v[0] == 'Province_State':
+          continue
+
+        place = v[0]
+        if i == 8:
+          previous[place] = {'confirmed': int(v[5]), 'deaths': int(v[6]), 'recovered': 0}
+        else:
+          current[place] = {'confirmed': int(v[5]), 'deaths': int(v[6]), 'recovered': 0}
+
+          p_confirmed = previous[place]['confirmed']
+          p_deaths = previous[place]['deaths']
+          p_recovered = previous[place]['recovered']
+
+          confirmed = current[place]['confirmed']
+          deaths = current[place]['deaths']
+          recovered = current[place]['recovered']
+
+          cur.execute('SELECT id FROM places WHERE place = %s and place_type = "us"', (place))
+          place_id = cur.fetchone()[0]
+
+          cur.execute('UPDATE place_list SET confirmed = %s, deaths = %s, recovered = %s, new_confirmed = %s, new_deaths = %s, new_recovered = %s WHERE place_id = %s', (confirmed, deaths, recovered, confirmed - p_confirmed, deaths - p_deaths, recovered - p_recovered, place_id, ))
+
+          cur.execute('UPDATE cases SET confirmed = %s, deaths = %s, recovered = %s, new_confirmed = %s, new_deaths = %s, new_recovered = %s WHERE place_id = %s AND timestamp = 1678338000', (confirmed, deaths, recovered, confirmed - p_confirmed, deaths - p_deaths, recovered - p_recovered, place_id, ))
+
+  conn.commit()
 
 main()
