@@ -21,7 +21,7 @@ def percent(a, b):
 
 def get_dates(place_type):
     start = datetime.date(2020, 4, 12) if place_type == 'states' else datetime.date(2021, 1, 21)
-    end = datetime.date(2020, 4, 15) if place_type == 'states' else datetime.date(2021, 1, 23)
+    end = datetime.date(2023, 3, 9) if place_type == 'states' else datetime.date(2023, 3, 9)
     dates = [start + datetime.timedelta(days=i) for i in range((end - start).days + 1)]
 
     return [str(date.month).zfill(2) + '-' + str(date.day).zfill(2) + '-' + str(date.year) for date in dates]
