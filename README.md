@@ -13,13 +13,16 @@ python3 covid.py init
 ```
 ```
 Inserting states place IDs
+Inserting states case data for 04-12-2020
+Inserting states case data for 04-13-2020
+...
 Inserting countries place IDs
+Inserting countries case data for 01-21-2021
+Inserting countries case data for 01-22-2021
+...
 Inserting country populations
 Inserting state populations
-Inserting states case data for 04-12-2020
-...
-Inserting countries case data for 01-21-2021
-...
+
 ```
 ### Update news articles from [News API](https://newsapi.org/)
 ```
@@ -38,3 +41,4 @@ python3 covid.py clear
 ```
 Tables cleared
 ```
+

@@ -43,9 +43,8 @@ def insert_place_ids(conn, place_type):
         q = 'INSERT INTO places (place, place_type) VALUES (%s, %s)'
         cur.execute(q, (place, 'us' if place_type == 'states' else 'country'))
 
-    q = 'INSERT INTO places (place, place_type) VALUES (%s, %s)'
-    v = (('United States' if place_type == 'states' else 'Global'), ('us' if place_type == 'states' else 'country'))
-    cur.execute(q, v)
+    if place_type == 'countries':
+        cur.execute('INSERT INTO places (place, place_type) VALUES (%s, %s)', ('Global', 'country'))
 
     conn.commit()
 
@@ -71,14 +70,19 @@ def insert_into_place_list(cur, values):
 def insert_cases(conn, place_type):
     cur = conn.cursor()
     data = {}
+    place_ids = {}
 
     dates = get_dates(place_type)
 
-    q = 'SELECT id FROM places WHERE place = %s and place_type = %s'
-    v = ('United States' if place_type == 'states' else 'Global', 'us' if place_type == 'states' else 'country')
-    cur.execute(q, v)
+    if place_type == 'countries':
+        cur.execute('SELECT id FROM places WHERE place = %s and place_type = %s', ('Global', 'country'))
+        aggregate_place_id = cur.fetchone()[0]
 
-    aggregate_place_id = cur.fetchone()[0]
+    q = 'SELECT id, place FROM places WHERE place_type = %s'
+    cur.execute(q, ('us' if place_type == 'states' else 'country'))
+
+    for place in cur.fetchall():
+        place_ids[place[1]] = place[0]
 
     for date_idx, date in enumerate(dates):
         timestamp = time.mktime(datetime.datetime.strptime(date, "%m-%d-%Y").timetuple())
@@ -127,32 +131,31 @@ def insert_cases(conn, place_type):
                 new_confirmed = confirmed - previous_confirmed
                 new_deaths = deaths - previous_deaths
 
+                new_confirmed = new_confirmed if new_confirmed > 0 else 0
+                new_deaths = new_deaths if new_deaths > 0 else 0
+
                 confirmed_per = data[place]['current']['confirmed_per']
                 deaths_per = data[place]['current']['deaths_per']
 
                 new_confirmed_per = data[place]['current']['new_confirmed_per']
                 new_deaths_per = data[place]['current']['new_deaths_per']
 
-                q = 'SELECT id FROM places WHERE place = %s and place_type = %s'
-                cur.execute(q, (place, 'us' if place_type == 'states' else 'country'))
-
-                place_id = cur.fetchone()[0]
-
-                values = (confirmed, deaths, new_confirmed, new_deaths, confirmed_per, deaths_per, place_id, timestamp,
-                    new_confirmed_per, new_deaths_per)
+                values = (confirmed, deaths, new_confirmed, new_deaths, confirmed_per, deaths_per, place_ids[place],
+                    timestamp, new_confirmed_per, new_deaths_per)
 
                 insert_into_cases(cur, values)
 
                 if date_idx == len(dates) - 1:
-                    values = (confirmed, deaths, new_confirmed, new_deaths, confirmed_per, deaths_per, place_id,
+                    values = (confirmed, deaths, new_confirmed, new_deaths, confirmed_per, deaths_per, place_ids[place],
                         new_confirmed_per, new_deaths_per)
 
                     insert_into_place_list(cur, values)
 
-            insert_into_cases(cur, (total_confirmed, total_deaths, new_confirmed_total, new_deaths_total, 100, 100,
-                aggregate_place_id, timestamp, 100, 100))
+            if place_type == 'countries':
+                insert_into_cases(cur, (total_confirmed, total_deaths, new_confirmed_total, new_deaths_total, 100, 100,
+                    aggregate_place_id, timestamp, 100, 100))
 
-            if date_idx == len(dates) - 1:
+            if date_idx == len(dates) - 1 and place_type == 'countries':
                 insert_into_place_list(cur, (total_confirmed, total_deaths, new_confirmed_total, new_deaths_total, 100,
                     100, aggregate_place_id, 100, 100))
 
@@ -194,8 +197,7 @@ def insert_populations(conn):
     country_place_ids = get_place_ids(cur, 'country')
     us_place_ids = get_place_ids(cur, 'us')
 
-    fix = {'United Kingdom of Great Britain and Northern Ireland':
-        'United Kingdom',
+    fix = {'United Kingdom of Great Britain and Northern Ireland': 'United Kingdom',
         'Myanmar': 'Burma',
         'Syrian Arab Republic': 'Syria',
         'Venezuela (Bolivarian Republic of)': 'Venezuela',
@@ -221,11 +223,11 @@ def insert_populations(conn):
     for country in read_json('https://restcountries.com/v2/all'):
         country_insert = country['name']
 
-        if country_insert not in country_place_ids:
-            continue
-
         if country['name'] in fix:
             country_insert = fix[country_insert]
+
+        if country_insert not in country_place_ids:
+            continue
 
         q = 'INSERT INTO population (place_id, population) VALUES (%s, %s)'
         cur.execute(q, (country_place_ids[country_insert], country['population']))
@@ -344,11 +346,11 @@ except:
     conn = pymysql.connect(db = creds[0], user = creds[1], passwd = creds[2])
 
 if arg == 'init':
-    insert_place_ids(conn, 'states')
-    insert_place_ids(conn, 'countries')
+    for place in ['states', 'countries']:
+        insert_place_ids(conn, place)
+        insert_cases(conn, place)
+
     insert_populations(conn)
-    insert_cases(conn, 'states')
-    insert_cases(conn, 'countries')
 elif arg == 'news':
     insert_news_articles(conn)
 elif arg == 'clear':
